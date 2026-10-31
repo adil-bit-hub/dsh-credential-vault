@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "凭据管家",
+    "description": "集中管理网页系统、GitHub 与 SSH 服务器凭据并备注用途，让当前和后续会话通过 credential_* / ssh_exec 工具直接使用。"
+  }
+}

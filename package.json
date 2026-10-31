@@ -1,0 +1,54 @@
+{
+  "name": "dsh-credential-vault",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Credential vault for DeepSeek Harness: manage web logins, GitHub tokens and SSH servers, and let later sessions use them through agent tools.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "src",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "test"
+  ],
+  "keywords": [
+    "dsh-plugin",
+    "credentials",
+    "vault",
+    "ssh",
+    "github"
+  ],
+  "license": "MIT",
+  "author": "adil-bit-hub",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adil-bit-hub/dsh-credential-vault.git"
+  },
+  "homepage": "https://github.com/adil-bit-hub/dsh-credential-vault#readme",
+  "bugs": {
+    "url": "https://github.com/adil-bit-hub/dsh-credential-vault/issues"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
+    }
+  }
+}

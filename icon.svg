@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="Credential Vault">
+  <defs>
+    <linearGradient id="dcv-shield" x1="0.12" y1="0.05" x2="0.9" y2="0.95">
+      <stop offset="0" stop-color="#5b96ff"/>
+      <stop offset="0.55" stop-color="#2f6be8"/>
+      <stop offset="1" stop-color="#1b4fc4"/>
+    </linearGradient>
+  </defs>
+  <path d="M64 14l36 13.2v30.6c0 24.9-15 43-36 53.2-21-10.2-36-28.3-36-53.2V27.2z" fill="url(#dcv-shield)"/>
+  <path d="M64 14l36 13.2v30.6c0 24.9-15 43-36 53.2-21-10.2-36-28.3-36-53.2V27.2z" fill="none" stroke="#ffffff" stroke-opacity="0.28" stroke-width="2"/>
+  <circle cx="64" cy="56" r="12" fill="#ffffff"/>
+  <path d="M64 66v17" stroke="#ffffff" stroke-width="9" stroke-linecap="round"/>
+</svg>

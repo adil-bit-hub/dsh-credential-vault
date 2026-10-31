@@ -1,0 +1,20 @@
+# dsh-credential-vault bundle patch.
+# Inserts one Host row; the Web Client half attaches to the same row through
+# package.json `dsh.client` and registers the Settings section.
+- insert:
+    - id: credential-vault
+      name: dsh-credential-vault
+      config:
+        # Append a short "available credentials" section to the system prompt so
+        # later sessions know what they can use without calling a tool first.
+        promptSummary: true
+        # Maximum number of entries listed in that prompt section.
+        maxPromptEntries: 12
+        # Let agent tools return secret values when the caller passes reveal=true.
+        allowAgentReveal: true
+        # Let agent tools create and update entries.
+        allowAgentWrite: true
+        # Let agent tools delete entries.
+        allowAgentDelete: false
+        # Default timeout for ssh_exec commands, in milliseconds.
+        sshTimeoutMs: 60000
