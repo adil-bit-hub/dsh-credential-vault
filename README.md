@@ -13,33 +13,30 @@ DeepSeek Harness 的凭据管理插件。把网页系统、GitHub 账号和 SSH 
 
 ## 安装
 
-从 GitHub 直接装（非桌面托管的 profile）：
+### 方式一：从 GitHub 安装（推荐）
 
-```powershell
-dsh plugin --profile <profile> add git+https://github.com/adil-bit-hub/dsh-credential-vault.git
+```sh
+dsh plugin --profile web add github:adil-bit-hub/dsh-credential-vault
 ```
 
-在 DSH 桌面端：
+### 方式二：本地开发安装
 
-1. 打开 **设置 → 插件**；
-2. 点 **添加插件** 右侧的箭头 → **安装第三方插件**；
-3. 在输入框里填入下面任一来源，然后点 **安装**：
+```sh
+git clone https://github.com/adil-bit-hub/dsh-credential-vault.git
+cd dsh-credential-vault
 
-   ```text
-   git+https://github.com/adil-bit-hub/dsh-credential-vault.git
-   ```
-
-   或把仓库 clone 到任意目录后，填入该目录的绝对路径。
-
-4. 安装完成后选择 **立即启用**（或稍后在插件页打开 `dsh-credential-vault` 的开关）。
-
-安装是加进当前 profile 的，对所有会话生效，重启后依然存在。也可以命令行安装本地目录（在 clone 下来的目录的上一级执行）：
-
-```powershell
-dsh plugin --profile <profile> add .\dsh-credential-vault
+dsh plugin --profile web add .
 ```
 
-> 本包没有运行时依赖、没有构建步骤：`index.js` + `src/*` 是 Host 侧，`client.js` 是浏览器侧。
+本包没有运行时依赖，也没有构建步骤（`package.json` 里没有 `prepare` / `build` 脚本）：Host 侧是 `index.js` + `src/*`，浏览器侧是 `client.js`。所以不需要执行 `npm install` / `npm run build`，clone 之后直接 `add .` 即可。
+
+重启 `dsh web`（或重启 DeepSeek Harness 桌面端），打开「设置 → 凭据管家」，点右上角 **新增凭据** 就能开始录入。
+
+> 桌面端使用保留 profile `desktop`：`dsh plugin --profile desktop add github:adil-bit-hub/dsh-credential-vault`。桌面端运行时会锁定该 profile，请先完全退出应用再执行安装命令。
+
+也可以从桌面端的图形界面安装：**设置 → 插件 → 添加插件** 右侧箭头 → **安装第三方插件**，填入 `github:adil-bit-hub/dsh-credential-vault`（或把仓库 clone 到任意目录后，填入该目录的绝对路径）→ **安装** → **立即启用**。
+
+安装是加进当前 profile 的，对所有会话生效，重启后依然存在。
 
 ## 使用
 
