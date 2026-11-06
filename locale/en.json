@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Credential Vault",
-    "description": "Keep web logins, GitHub tokens and SSH servers with notes, and let this and later sessions use them through credential_* and ssh_exec tools."
+    "description": "Keep web logins, GitHub tokens, SSH servers and HTTP/SOCKS proxies with notes, and let this and later sessions use them through credential_*, ssh_exec and proxy_test tools."
   }
 }

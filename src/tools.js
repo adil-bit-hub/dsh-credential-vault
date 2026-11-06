@@ -1,13 +1,14 @@
 /**
  * Agent tools for `dsh-credential-vault`.
  *
- * Four tools share the vault service: `credential_list`, `credential_get`,
- * `credential_save` and `ssh_exec`. The definitions are plain registry objects
- * (the same shape `defineTool` produces) so this package needs no build step
- * and no runtime dependency on a Harness package.
+ * Five tools share the vault service: `credential_list`, `credential_get`,
+ * `credential_save`, `ssh_exec` and `proxy_test`. The definitions are plain
+ * registry objects (the same shape `defineTool` produces) so this package needs
+ * no build step and no runtime dependency on a Harness package.
  *
  * @module dsh-credential-vault/tools
  */
+import { testProxy } from './proxy.js'
 import { runSshCommand } from './ssh.js'
 import { VaultError } from './vault.js'
 
@@ -36,8 +37,8 @@ export function registerTools(ctx, vault, settings) {
     parameters: {
       type: 'object',
       properties: {
-        type: { type: 'string', enum: ['web', 'github', 'ssh'], description: '只看某一类型：web=网页系统，github=GitHub，ssh=服务器。' },
-        query: { type: 'string', description: '按名称、备注、网址、主机或账号做不区分大小写的模糊过滤。' },
+        type: { type: 'string', enum: ['web', 'github', 'ssh', 'proxy'], description: '只看某一类型：web=网页系统，github=GitHub，ssh=服务器，proxy=代理。' },
+        query: { type: 'string', description: '按名称、备注、网址、主机、账号或代理协议做不区分大小写的模糊过滤。' },
       },
     },
     output: { schema: {}, render: JSON_RENDER },
@@ -49,7 +50,7 @@ export function registerTools(ctx, vault, settings) {
       if (typeof args.query === 'string' && args.query.trim() !== '') {
         const needle = args.query.trim().toLowerCase()
         entries = entries.filter((entry) =>
-          [entry.name, entry.note, entry.url, entry.host, entry.username]
+          [entry.name, entry.note, entry.url, entry.host, entry.username, entry.protocol]
             .filter((value) => typeof value === 'string')
             .some((value) => value.toLowerCase().includes(needle)),
         )
@@ -57,7 +58,7 @@ export function registerTools(ctx, vault, settings) {
       return {
         count: entries.length,
         entries,
-        hint: '需要明文时调用 credential_get 并传 reveal=true；SSH 服务器优先用 ssh_exec 执行命令。',
+        hint: '需要明文时调用 credential_get 并传 reveal=true；SSH 服务器优先用 ssh_exec 执行命令；代理先用 proxy_test 验证连通性。',
       }
     },
   })
@@ -90,22 +91,25 @@ export function registerTools(ctx, vault, settings) {
     description:
       '新建或更新一条凭据。不传 id 表示新建；传 id 表示更新（未提供的字段保持不变）。' +
       '字段：web 需要 name/url/username/password；github 需要 name/username/token（可选 email）；' +
-      'ssh 需要 name/host/username 与 password 或 privateKey（可选 port、passphrase、authMethod=password|key）。' +
+      'ssh 需要 name/host/username 与 password 或 privateKey（可选 port、passphrase、authMethod=password|key）；' +
+      'proxy 需要 name/host（可选 protocol=http|https|socks5|socks5h|socks4|socks4a、port、username、password；' +
+      'host 也可以直接粘贴完整代理地址，例如 "socks5://user:pass@10.0.0.2:1080"，会自动拆分）。' +
       'note 用来记录这条凭据的用途。密钥字段传 null 表示清除，留空表示保持原值。',
     parameters: {
       type: 'object',
       properties: {
         id: { type: 'string', description: '更新已有凭据时提供；新建时省略。' },
-        type: { type: 'string', enum: ['web', 'github', 'ssh'], description: '凭据类型；更新时可省略。' },
+        type: { type: 'string', enum: ['web', 'github', 'ssh', 'proxy'], description: '凭据类型；更新时可省略。' },
         name: { type: 'string', description: '凭据名称，例如「公司 OA」。' },
         note: { type: 'string', description: '用途备注，例如「内网报销系统，仅内网可访问」。' },
         url: { type: 'string', description: 'web：登录网址。' },
-        username: { type: 'string', description: 'web/github/ssh：账号或登录用户。' },
-        password: { type: 'string', description: 'web/ssh：密码明文。' },
+        username: { type: 'string', description: 'web/github/ssh/proxy：账号、登录用户或代理用户名。' },
+        password: { type: 'string', description: 'web/ssh/proxy：密码明文。' },
         token: { type: 'string', description: 'github：Personal Access Token。' },
         email: { type: 'string', description: 'github：git 提交邮箱（可选）。' },
-        host: { type: 'string', description: 'ssh：主机名或 IP。' },
-        port: { type: 'number', description: 'ssh：端口，默认 22。' },
+        host: { type: 'string', description: 'ssh：主机名或 IP；proxy：代理主机名/IP，也可以填完整代理地址（会自动拆分协议、端口和认证）。' },
+        port: { type: 'number', description: 'ssh 默认 22；proxy 默认 http/https 8080、socks 1080。' },
+        protocol: { type: 'string', enum: ['http', 'https', 'socks5', 'socks5h', 'socks4', 'socks4a'], description: 'proxy：代理协议，默认 http；带 h/a 的变体由代理解析目标域名。' },
         authMethod: { type: 'string', enum: ['password', 'key'], description: 'ssh：认证方式，默认按是否提供私钥推断。' },
         privateKey: { type: 'string', description: 'ssh：OpenSSH/PEM 私钥全文。' },
         passphrase: { type: 'string', description: 'ssh：私钥口令（可选）。' },
@@ -154,6 +158,36 @@ export function registerTools(ctx, vault, settings) {
         if (error instanceof VaultError) throw error
         throw new VaultError('ssh-failed', errorText(error))
       }
+    },
+  })
+
+  ctx.tools.register({
+    name: 'proxy_test',
+    description:
+      '用凭据管家中保存的代理凭据测试连通性：通过该代理请求一个目标网址，返回是否成功、HTTP 状态码、耗时和出口 IP。' +
+      '支持 http / https / socks5 / socks5h / socks4 / socks4a；代理密码不会出现在命令行或工具参数里。' +
+      '测试失败时返回 ok=false 与 error 说明（例如连接超时、认证失败、代理拒绝），不会抛出异常。',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: '代理凭据 id（来自 credential_list，type=proxy）。' },
+        url: { type: 'string', description: '要请求的目标网址；默认取插件配置 proxyTestUrl，通常是查出口 IP 的接口。' },
+        timeoutMs: { type: 'number', description: '超时时间（毫秒），默认取插件配置 proxyTimeoutMs。' },
+      },
+      required: ['id'],
+    },
+    output: { schema: {}, render: JSON_RENDER },
+    async execute(args = {}, exec) {
+      if (typeof args.id !== 'string' || args.id === '') throw new VaultError('invalid', '缺少代理凭据 id。')
+      const entry = await vault.readRaw(args.id)
+      if (entry.type !== 'proxy') throw new VaultError('invalid', '只能对 proxy 类型的凭据执行 proxy_test。')
+      const timeoutMs = Number.isFinite(args.timeoutMs) ? args.timeoutMs : settings.proxyTimeoutMs
+      const result = await testProxy(entry, {
+        url: typeof args.url === 'string' && args.url.trim() !== '' ? args.url : settings.proxyTestUrl,
+        timeoutMs,
+      })
+      if (exec?.signal?.aborted) throw new VaultError('proxy-failed', '测试已取消。')
+      return result
     },
   })
 }

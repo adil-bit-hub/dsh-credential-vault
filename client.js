@@ -20,8 +20,20 @@ window.__ModuleLoader__.load({
       web: { label: '网页系统', hint: '登录网址、账户与密码', color: '#3b82f6' },
       github: { label: 'GitHub', hint: '用户名与访问令牌，用于仓库操作', color: '#8b5cf6' },
       ssh: { label: 'SSH 服务器', hint: '主机、登录用户与密码或私钥', color: '#10b981' },
+      proxy: { label: '代理', hint: 'HTTP / HTTPS / SOCKS 代理与认证', color: '#f59e0b' },
     }
-    const TYPE_ORDER = ['web', 'github', 'ssh']
+    const TYPE_ORDER = ['web', 'github', 'ssh', 'proxy']
+
+    const PROXY_PROTOCOLS = ['http', 'https', 'socks5', 'socks5h', 'socks4', 'socks4a']
+    const PROXY_DEFAULT_PORTS = { http: 8080, https: 8080, socks5: 1080, socks5h: 1080, socks4: 1080, socks4a: 1080 }
+    const PROXY_LABELS = {
+      http: 'HTTP',
+      https: 'HTTPS',
+      socks5: 'SOCKS5',
+      socks5h: 'SOCKS5h',
+      socks4: 'SOCKS4',
+      socks4a: 'SOCKS4a',
+    }
 
     const STYLES = String.raw`
 .dcv-page {
@@ -76,6 +88,7 @@ window.__ModuleLoader__.load({
 .dcv-icon[data-type='web'] { background: color-mix(in srgb, #3b82f6 12%, transparent); color: #2563eb; }
 .dcv-icon[data-type='github'] { background: color-mix(in srgb, #8b5cf6 12%, transparent); color: #7c3aed; }
 .dcv-icon[data-type='ssh'] { background: color-mix(in srgb, #10b981 12%, transparent); color: #059669; }
+.dcv-icon[data-type='proxy'] { background: color-mix(in srgb, #f59e0b 14%, transparent); color: #b45309; }
 .dcv-cardHead { flex: 1; min-width: 0; }
 .dcv-titleRow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .dcv-name { font-size: 14px; font-weight: 620; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
@@ -83,6 +96,10 @@ window.__ModuleLoader__.load({
 .dcv-target { margin-top: 2px; color: var(--dsw-alias-label-secondary, #646a73); font-size: 12.5px; word-break: break-all; }
 .dcv-cardActions { display: flex; align-items: center; gap: 4px; flex: none; }
 .dcv-note { margin: 10px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--dsw-alias-bg-layer-2, #fafbfc); color: var(--dsw-alias-label-secondary, #646a73); font-size: 12.5px; line-height: 19px; white-space: pre-wrap; word-break: break-word; }
+.dcv-test { margin-top: 10px; padding: 8px 10px; border-radius: 8px; font-size: 12.5px; line-height: 19px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dcv-test[data-ok='true'] { background: color-mix(in srgb, #10b981 9%, transparent); border: 1px solid color-mix(in srgb, #10b981 26%, transparent); color: #067647; }
+.dcv-test[data-ok='false'] { background: color-mix(in srgb, #f54a45 8%, transparent); border: 1px solid color-mix(in srgb, #f54a45 26%, transparent); color: #b42318; }
+.dcv-test code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; }
 .dcv-secrets { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
 .dcv-secretRow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .dcv-secretLabel { flex: none; min-width: 52px; color: var(--dsw-alias-label-tertiary, #8f959e); font-size: 12px; }
@@ -102,7 +119,7 @@ window.__ModuleLoader__.load({
 .dcv-editorHead h3 { margin: 0; font-size: 14px; font-weight: 640; }
 .dcv-close { border: none; background: transparent; color: var(--dsw-alias-label-tertiary, #8f959e); font-size: 18px; line-height: 1; width: 26px; height: 26px; border-radius: 6px; cursor: pointer; }
 .dcv-close:hover { background: var(--dsw-alias-interactive-bg-hover, #f5f6f7); color: var(--dsw-alias-label-primary, #1f2329); }
-.dcv-typeGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.dcv-typeGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
 .dcv-typeCard { text-align: left; padding: 10px 12px; border-radius: 9px; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); background: var(--dsw-alias-bg-layer-1, #fff); color: inherit; font: inherit; cursor: pointer; }
 .dcv-typeCard[aria-pressed='true'] { border-color: var(--dsw-alias-state-business-primary, #3370ff); background: color-mix(in srgb, var(--dsw-alias-state-business-primary, #3370ff) 7%, transparent); }
 .dcv-typeCard b { display: block; font-size: 13px; font-weight: 600; }
@@ -183,6 +200,12 @@ window.__ModuleLoader__.load({
     function targetOf(entry) {
       if (entry.type === 'web') return entry.url || ''
       if (entry.type === 'github') return entry.username ? `github.com/${entry.username}` : 'github.com'
+      if (entry.type === 'proxy') {
+        const protocol = entry.protocol || 'http'
+        const host = entry.host || '?'
+        const port = entry.port || PROXY_DEFAULT_PORTS[protocol] || 8080
+        return `${protocol}://${entry.username ? `${entry.username}@` : ''}${host}:${port}`
+      }
       return `${entry.username || '?'}@${entry.host || '?'}:${entry.port || 22}`
     }
 
@@ -215,6 +238,15 @@ window.__ModuleLoader__.load({
       if (type === 'github') {
         return h('svg', common,
           h('path', { d: 'M9 19c-4.3 1.3-4.3-2.5-6-3m12 5v-3.9a3.4 3.4 0 0 0-.9-2.6c3-.3 6.1-1.5 6.1-6.7a5.2 5.2 0 0 0-1.4-3.6 4.9 4.9 0 0 0-.1-3.6s-1.1-.3-3.7 1.4a12.5 12.5 0 0 0-6.6 0C5.8 1.3 4.7 1.6 4.7 1.6a4.9 4.9 0 0 0-.1 3.6A5.2 5.2 0 0 0 3.2 8.9c0 5.1 3.1 6.3 6.1 6.7a3.4 3.4 0 0 0-.9 2.6V21' }))
+      }
+      if (type === 'proxy') {
+        return h('svg', common,
+          h('circle', { cx: 5.5, cy: 6, r: 2.6 }),
+          h('circle', { cx: 18.5, cy: 6, r: 2.6 }),
+          h('circle', { cx: 12, cy: 18, r: 2.6 }),
+          h('path', { d: 'M8.1 6h7.8' }),
+          h('path', { d: 'M6.8 8.4 10.8 15.7' }),
+          h('path', { d: 'M17.2 8.4 13.2 15.7' }))
       }
       return h('svg', common,
         h('circle', { cx: 12, cy: 12, r: 9 }),
@@ -251,9 +283,10 @@ window.__ModuleLoader__.load({
     }
 
     function emptyDraft(type) {
+      const kind = type || 'web'
       return {
         id: '',
-        type: type || 'web',
+        type: kind,
         name: '',
         note: '',
         url: '',
@@ -262,7 +295,8 @@ window.__ModuleLoader__.load({
         token: '',
         email: '',
         host: '',
-        port: 22,
+        port: kind === 'proxy' ? 8080 : 22,
+        protocol: 'http',
         authMethod: 'password',
         privateKey: '',
         passphrase: '',
@@ -283,7 +317,8 @@ window.__ModuleLoader__.load({
         token: revealed && revealed.token ? revealed.token : '',
         email: entry.email || '',
         host: entry.host || '',
-        port: entry.port || 22,
+        port: entry.port || (entry.type === 'proxy' ? 8080 : 22),
+        protocol: entry.protocol || 'http',
         authMethod: entry.authMethod || 'password',
         privateKey: '',
         passphrase: '',
@@ -299,6 +334,22 @@ window.__ModuleLoader__.load({
 
     function Editor({ draft, busy, onChange, onCancel, onSave }) {
       const set = (patch) => onChange({ ...draft, ...patch, error: null })
+      const setProtocol = (protocol) => {
+        const previousDefault = PROXY_DEFAULT_PORTS[draft.protocol || 'http'] || 8080
+        const current = draft.port
+        const keepCustom = current !== '' && current !== null && Number(current) !== previousDefault
+        set({ protocol, port: keepCustom ? current : (PROXY_DEFAULT_PORTS[protocol] || 8080) })
+      }
+      const setType = (nextType) => {
+        const patch = { type: nextType }
+        const proxyDefault = PROXY_DEFAULT_PORTS[draft.protocol || 'http'] || 8080
+        if (nextType === 'proxy' && (draft.port === '' || draft.port === null || Number(draft.port) === 22)) {
+          patch.port = proxyDefault
+        } else if (nextType !== 'proxy' && Number(draft.port) === proxyDefault) {
+          patch.port = 22
+        }
+        set(patch)
+      }
       const type = draft.type
       const isEdit = Boolean(draft.id)
       const canClear = (field) => draft.existing[field] === true
@@ -324,7 +375,7 @@ window.__ModuleLoader__.load({
             type: 'button',
             className: 'dcv-typeCard',
             'aria-pressed': draft.type === key,
-            onClick: () => set({ type: key }),
+            onClick: () => setType(key),
           },
           h('b', null, TYPE_META[key].label),
           h('span', null, TYPE_META[key].hint)))) : null,
@@ -333,7 +384,7 @@ window.__ModuleLoader__.load({
             h('input', {
               autoFocus: true,
               value: draft.name,
-              placeholder: type === 'web' ? '例如：公司 OA' : type === 'github' ? '例如：个人 GitHub' : '例如：生产服务器 A',
+              placeholder: type === 'web' ? '例如：公司 OA' : type === 'github' ? '例如：个人 GitHub' : type === 'proxy' ? '例如：公司出口代理' : '例如：生产服务器 A',
               onChange: (event) => set({ name: event.target.value }),
             })),
           type === 'web' ? h(Field, { label: '登录网址' },
@@ -395,11 +446,41 @@ window.__ModuleLoader__.load({
           type === 'ssh' && (draft.authMethod || 'password') === 'password' ? secretInput('password', '密码', 'SSH 登录密码') : null,
           type === 'ssh' && draft.authMethod === 'key' ? secretInput('privateKey', '私钥', '-----BEGIN OPENSSH PRIVATE KEY-----', true) : null,
           type === 'ssh' && draft.authMethod === 'key' ? secretInput('passphrase', '私钥口令（可选）', '私钥如果没有口令就留空') : null,
+          type === 'proxy' ? h(Field, { label: '代理协议' },
+            h('select', {
+              value: draft.protocol || 'http',
+              onChange: (event) => setProtocol(event.target.value),
+            },
+            PROXY_PROTOCOLS.map((key) => h('option', { key, value: key }, PROXY_LABELS[key])))) : null,
+          type === 'proxy' ? h(Field, { label: '代理主机', hint: '也可以直接粘贴完整代理地址，例如 socks5://user:pass@10.0.0.2:1080，保存时会自动拆分。' },
+            h('input', {
+              value: draft.host,
+              placeholder: '10.0.0.2 或 proxy.example.com',
+              spellCheck: false,
+              onChange: (event) => set({ host: event.target.value }),
+            })) : null,
+          type === 'proxy' ? h(Field, { label: '代理端口', hint: `默认 ${PROXY_DEFAULT_PORTS[draft.protocol || 'http'] || 8080}，可改。` },
+            h('input', {
+              type: 'number',
+              min: 1,
+              max: 65535,
+              value: draft.port,
+              onChange: (event) => set({ port: event.target.value === '' ? '' : Number(event.target.value) }),
+            })) : null,
+          type === 'proxy' ? h(Field, { label: '代理用户名（可选）', hint: '不需要认证就留空。' },
+            h('input', {
+              value: draft.username,
+              placeholder: '代理认证用户名',
+              autoComplete: 'off',
+              spellCheck: false,
+              onChange: (event) => set({ username: event.target.value }),
+            })) : null,
+          type === 'proxy' ? secretInput('password', '代理密码（可选）', '代理认证密码') : null,
           h(Field, { label: '备注（这条凭据用来做什么）', wide: true, hint: '会展示在列表里，也会出现在后续会话的凭据概览中。' },
             h('textarea', {
               value: draft.note,
               rows: 3,
-              placeholder: type === 'web' ? '例如：内网报销系统，每月报账用' : type === 'github' ? '例如：个人仓库管理，用于 clone / push' : '例如：生产环境部署机，systemctl 重启服务用',
+              placeholder: type === 'web' ? '例如：内网报销系统，每月报账用' : type === 'github' ? '例如：个人仓库管理，用于 clone / push' : type === 'proxy' ? '例如：公司出口代理，访问外网 / GitHub 时用' : '例如：生产环境部署机，systemctl 重启服务用',
               onChange: (event) => set({ note: event.target.value }),
             }))),
         draft.error ? h('div', { className: 'dcv-msg dcv-msgError' }, draft.error) : null,
@@ -423,7 +504,7 @@ window.__ModuleLoader__.load({
         multiline && value !== null ? h('pre', { className: 'dcv-pre' }, value) : null)
     }
 
-    function EntryCard({ entry, revealed, busy, confirming, onReveal, onHide, onCopy, onEdit, onDelete }) {
+    function EntryCard({ entry, revealed, busy, confirming, testing, testResult, onReveal, onHide, onCopy, onEdit, onDelete, onTest }) {
       const secrets = []
       if (entry.type === 'web' && entry.hasPassword) {
         secrets.push(h(SecretRow, { key: 'password', label: '密码', entry, field: 'password', revealed: revealed.password, onReveal, onHide, onCopy }))
@@ -440,7 +521,21 @@ window.__ModuleLoader__.load({
       if (entry.type === 'ssh' && entry.hasPassphrase) {
         secrets.push(h(SecretRow, { key: 'passphrase', label: '口令', entry, field: 'passphrase', revealed: revealed.passphrase, onReveal, onHide, onCopy }))
       }
+      if (entry.type === 'proxy' && entry.hasPassword) {
+        secrets.push(h(SecretRow, { key: 'password', label: '密码', entry, field: 'password', revealed: revealed.password, onReveal, onHide, onCopy }))
+      }
       const isBusy = busy === entry.id
+      const isTesting = testing === entry.id
+      const testRow = entry.type === 'proxy' && testResult
+        ? h('div', { className: 'dcv-test', 'data-ok': testResult.ok === true ? 'true' : 'false' },
+          testResult.ok
+            ? h(React.Fragment, null,
+              h('span', null, `连通正常 · ${testResult.latencyMs ?? 0} ms`),
+              testResult.exitIp ? h('span', null, '出口 IP：', h('code', null, testResult.exitIp)) : null,
+              testResult.status ? h('span', null, `HTTP ${testResult.status}`) : null)
+            : h('span', null, `测试失败：${testResult.error || '未知错误'}`),
+          h('button', { type: 'button', className: 'dcv-btn dcv-btnGhost', disabled: isTesting, onClick: () => onTest(entry) }, isTesting ? '测试中…' : '重测'))
+        : null
       return h('article', { className: 'dcv-card' },
         h('div', { className: 'dcv-cardTop' },
           h('span', { className: 'dcv-icon', 'data-type': entry.type }, h(Icon, { type: entry.type })),
@@ -448,10 +543,27 @@ window.__ModuleLoader__.load({
             h('div', { className: 'dcv-titleRow' },
               h('span', { className: 'dcv-name', title: entry.name }, entry.name),
               h('span', { className: 'dcv-badge' }, typeLabel(entry.type)),
-              entry.type === 'ssh' ? h('span', { className: 'dcv-badge' }, entry.authMethod === 'key' ? '密钥登录' : '密码登录') : null),
+              entry.type === 'ssh' ? h('span', { className: 'dcv-badge' }, entry.authMethod === 'key' ? '密钥登录' : '密码登录') : null,
+              entry.type === 'proxy' ? h('span', { className: 'dcv-badge' }, PROXY_LABELS[entry.protocol] || entry.protocol) : null,
+              entry.type === 'proxy' ? h('span', { className: 'dcv-badge' }, entry.hasPassword || entry.username ? '需认证' : '免认证') : null),
             h('div', { className: 'dcv-target' }, targetOf(entry))),
           h('div', { className: 'dcv-cardActions' },
-            h('button', { type: 'button', className: 'dcv-btn dcv-btnGhost', onClick: () => onCopy(entry.username || '') , disabled: !entry.username, title: '复制账号' }, '复制账号'),
+            entry.type === 'proxy'
+              ? h('button', {
+                type: 'button',
+                className: 'dcv-btn dcv-btnSoft',
+                disabled: isTesting,
+                onClick: () => onTest(entry),
+              }, isTesting ? '测试中…' : '测试')
+              : h('button', { type: 'button', className: 'dcv-btn dcv-btnGhost', onClick: () => onCopy(entry.username || ''), disabled: !entry.username, title: '复制账号' }, '复制账号'),
+            entry.type === 'proxy'
+              ? h('button', {
+                type: 'button',
+                className: 'dcv-btn dcv-btnGhost',
+                title: '复制不含密码的代理地址',
+                onClick: () => onCopy(entry.url || targetOf(entry)),
+              }, '复制链接')
+              : null,
             h('button', { type: 'button', className: 'dcv-btn dcv-btnSoft', onClick: () => onEdit(entry) }, '编辑'),
             h('button', {
               type: 'button',
@@ -460,6 +572,7 @@ window.__ModuleLoader__.load({
               onClick: () => onDelete(entry),
             }, confirming ? '确认删除？' : (isBusy ? '删除中…' : '删除')))),
         entry.note ? h('p', { className: 'dcv-note' }, entry.note) : null,
+        testRow,
         secrets.length > 0 ? h('div', { className: 'dcv-secrets' }, secrets) : null)
     }
 
@@ -475,6 +588,8 @@ window.__ModuleLoader__.load({
       const [busyId, setBusyId] = React.useState(null)
       const [confirmId, setConfirmId] = React.useState(null)
       const [revealed, setRevealed] = React.useState({})
+      const [testingId, setTestingId] = React.useState(null)
+      const [tests, setTests] = React.useState({})
 
       const flash = React.useCallback((kind, text) => {
         setNotice({ kind, text })
@@ -539,6 +654,11 @@ window.__ModuleLoader__.load({
             delete next[entry.id]
             return next
           })
+          setTests((current) => {
+            const next = { ...current }
+            delete next[entry.id]
+            return next
+          })
           flash('ok', `已删除「${entry.name}」。`)
           await refresh()
         } catch (error) {
@@ -568,6 +688,18 @@ window.__ModuleLoader__.load({
         })
       }
 
+      const test = async (entry) => {
+        setTestingId(entry.id)
+        try {
+          const value = await callRpc('test', { id: entry.id })
+          setTests((current) => ({ ...current, [entry.id]: value }))
+        } catch (error) {
+          setTests((current) => ({ ...current, [entry.id]: { ok: false, error: error.message || String(error) } }))
+        } finally {
+          setTestingId(null)
+        }
+      }
+
       const copy = async (value) => {
         if (!value) return
         try {
@@ -578,13 +710,13 @@ window.__ModuleLoader__.load({
         }
       }
 
-      const counts = { all: entries.length, web: 0, github: 0, ssh: 0 }
+      const counts = { all: entries.length, web: 0, github: 0, ssh: 0, proxy: 0 }
       for (const entry of entries) counts[entry.type] = (counts[entry.type] || 0) + 1
       const needle = query.trim().toLowerCase()
       const visible = entries.filter((entry) => {
         if (filter !== 'all' && entry.type !== filter) return false
         if (needle === '') return true
-        return [entry.name, entry.note, entry.url, entry.host, entry.username]
+        return [entry.name, entry.note, entry.url, entry.host, entry.username, entry.protocol]
           .filter((value) => typeof value === 'string')
           .some((value) => value.toLowerCase().includes(needle))
       })
@@ -593,7 +725,7 @@ window.__ModuleLoader__.load({
         h('div', { className: 'dcv-head' },
           h('div', { className: 'dcv-headText' },
             h('h2', null, '凭据管家'),
-            h('p', null, '集中保存网页系统、GitHub 与 SSH 服务器的登录凭据，并备注用途。保存后，当前及后续会话都能通过 credential_list / credential_get 读取，SSH 服务器还可以用 ssh_exec 直接执行命令。明文只保存在本机 Host 的凭据存储里，列表与提示词中只有元数据。')),
+            h('p', null, '集中保存网页系统、GitHub、SSH 服务器与 HTTP/SOCKS 代理的登录信息，并备注用途。保存后，当前及后续会话都能通过 credential_list / credential_get 读取，SSH 服务器可以用 ssh_exec 直接执行命令，代理可以用 proxy_test 一键测试连通性与出口 IP。明文只保存在本机 Host 的凭据存储里，列表与提示词中只有元数据。')),
           h('div', { className: 'dcv-headActions' },
             h('button', {
               type: 'button',
@@ -625,7 +757,7 @@ window.__ModuleLoader__.load({
               onChange: (event) => setQuery(event.target.value),
             })),
           h('div', { className: 'dcv-tabs', role: 'group', 'aria-label': '按类型筛选' },
-            [['all', '全部'], ['web', '网页'], ['github', 'GitHub'], ['ssh', 'SSH']].map(([key, label]) =>
+            [['all', '全部'], ['web', '网页'], ['github', 'GitHub'], ['ssh', 'SSH'], ['proxy', '代理']].map(([key, label]) =>
               h('button', {
                 key,
                 type: 'button',
@@ -638,7 +770,7 @@ window.__ModuleLoader__.load({
           : visible.length === 0
             ? h('div', { className: 'dcv-empty' },
               h('strong', null, entries.length === 0 ? '还没有保存任何凭据' : '没有匹配的凭据'),
-              h('span', null, entries.length === 0 ? '点右上角「新增凭据」，添加网页系统、GitHub 或 SSH 服务器。' : '换个关键词或筛选条件试试。'))
+              h('span', null, entries.length === 0 ? '点右上角「新增凭据」，添加网页系统、GitHub、SSH 服务器或代理。' : '换个关键词或筛选条件试试。'))
             : h('div', { className: 'dcv-list' },
               visible.map((entry) => h(EntryCard, {
                 key: entry.id,
@@ -646,6 +778,8 @@ window.__ModuleLoader__.load({
                 revealed: revealed[entry.id] || {},
                 busy: busyId,
                 confirming: confirmId === entry.id,
+                testing: testingId,
+                testResult: tests[entry.id],
                 onReveal: reveal,
                 onHide: hide,
                 onCopy: copy,
@@ -654,6 +788,7 @@ window.__ModuleLoader__.load({
                   setNotice(null)
                 },
                 onDelete: remove,
+                onTest: test,
               }))),
         notice ? h('div', { className: notice.kind === 'error' ? 'dcv-msg dcv-msgError' : 'dcv-msg dcv-msgOk' }, notice.text) : null)
     }

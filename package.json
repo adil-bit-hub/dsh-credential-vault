@@ -1,8 +1,8 @@
 {
   "name": "dsh-credential-vault",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Credential vault for DeepSeek Harness: manage web logins, GitHub tokens and SSH servers, and let later sessions use them through agent tools.",
+  "description": "Credential vault for DeepSeek Harness: manage web logins, GitHub tokens, SSH servers and HTTP/SOCKS proxies, and let later sessions use them through agent tools.",
   "type": "module",
   "main": "index.js",
   "exports": {
@@ -27,7 +27,9 @@
     "credentials",
     "vault",
     "ssh",
-    "github"
+    "github",
+    "proxy",
+    "socks5"
   ],
   "license": "MIT",
   "author": "adil-bit-hub",
@@ -38,6 +40,9 @@
   "homepage": "https://github.com/adil-bit-hub/dsh-credential-vault#readme",
   "bugs": {
     "url": "https://github.com/adil-bit-hub/dsh-credential-vault/issues"
+  },
+  "scripts": {
+    "test": "node test/self-test.mjs && node test/rpc-test.mjs && node test/client-test.mjs"
   },
   "dsh": {
     "bundle": {

@@ -10,7 +10,8 @@
  *
  * @module dsh-credential-vault/rpc
  */
-import { VaultError } from './vault.js'
+import { testProxy } from './proxy.js'
+import { PROXY_PROTOCOLS, VaultError } from './vault.js'
 
 /** Route prefix; the browser half posts to `<prefix>/<endpoint>`. */
 export const RPC_CHANNEL = '/credential-vault'
@@ -64,7 +65,7 @@ export function registerRpc(web, vault, settings) {
   const handlers = {
     async list() {
       const entries = await vault.list()
-      return { entries, count: entries.length, version: 1 }
+      return { entries, count: entries.length, version: 2 }
     },
     async save(payload) {
       return { entry: await vault.save(record(payload)) }
@@ -79,13 +80,25 @@ export function registerRpc(web, vault, settings) {
       if (typeof id !== 'string' || typeof field !== 'string') throw new VaultError('invalid', '缺少凭据 id 或字段名。')
       return await vault.revealField(id, field)
     },
+    async test(payload) {
+      const { id, url, timeoutMs } = record(payload)
+      if (typeof id !== 'string' || id === '') throw new VaultError('invalid', '缺少代理凭据 id。')
+      const entry = await vault.readRaw(id)
+      if (entry.type !== 'proxy') throw new VaultError('invalid', '只有代理凭据可以测试连通性。')
+      return await testProxy(entry, {
+        url: typeof url === 'string' && url.trim() !== '' ? url : settings.proxyTestUrl,
+        timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : settings.proxyTimeoutMs,
+      })
+    },
     async status() {
       const entries = await vault.list()
       return {
         ok: true,
         count: entries.length,
-        version: 1,
+        version: 2,
         store: 'credentials',
+        proxyProtocols: PROXY_PROTOCOLS,
+        proxyTestUrl: settings.proxyTestUrl,
         allowAgentReveal: settings.allowAgentReveal !== false,
         allowAgentWrite: settings.allowAgentWrite !== false,
       }

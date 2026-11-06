@@ -18,13 +18,30 @@ import { randomBytes } from 'node:crypto'
 export const SCOPE = 'dsh-credential-vault'
 
 /** Supported credential kinds. */
-export const TYPES = Object.freeze(['web', 'github', 'ssh'])
+export const TYPES = Object.freeze(['web', 'github', 'ssh', 'proxy'])
 
 /** Secret fields per kind; everything here is masked unless revealed. */
 export const SECRET_FIELDS = Object.freeze({
   web: Object.freeze(['password']),
   github: Object.freeze(['token']),
   ssh: Object.freeze(['password', 'privateKey', 'passphrase']),
+  proxy: Object.freeze(['password']),
+})
+
+/**
+ * Proxy URL schemes this plugin understands. `socks5h` / `socks4a` resolve the
+ * target host name at the proxy, the plain variants resolve it locally.
+ */
+export const PROXY_PROTOCOLS = Object.freeze(['http', 'https', 'socks5', 'socks5h', 'socks4', 'socks4a'])
+
+/** Conventional listen ports used when the caller omits one. */
+export const PROXY_DEFAULT_PORTS = Object.freeze({
+  http: 8080,
+  https: 8080,
+  socks5: 1080,
+  socks5h: 1080,
+  socks4: 1080,
+  socks4a: 1080,
 })
 
 const ID_RE = /^[a-z][a-z0-9-]{1,63}$/
@@ -93,11 +110,72 @@ function normalizeUrl(raw) {
   return url.toString()
 }
 
-function normalizePort(raw) {
-  if (raw === undefined || raw === null || raw === '') return 22
+function normalizePort(raw, fallback = 22, label = '端口') {
+  if (raw === undefined || raw === null || raw === '') return fallback
   const port = typeof raw === 'number' ? raw : Number.parseInt(text(raw), 10)
-  if (!Number.isInteger(port) || port < 1 || port > 65535) fail('invalid', 'SSH 端口必须是 1-65535 之间的整数。')
+  if (!Number.isInteger(port) || port < 1 || port > 65535) fail('invalid', `${label}必须是 1-65535 之间的整数。`)
   return port
+}
+
+/** Default port for one proxy protocol. */
+export function proxyPort(protocol) {
+  return PROXY_DEFAULT_PORTS[protocol] ?? 8080
+}
+
+/**
+ * Compose the proxy URL used by lists, prompts and copy buttons. Credentials
+ * are only embedded when the caller explicitly asks for them.
+ * @param {object} entry - proxy entry.
+ * @param {{ withCredentials?: boolean }} [options] - include `user:pass@`.
+ * @returns {string} e.g. `socks5://10.0.0.2:1080`.
+ */
+export function buildProxyUrl(entry, options = {}) {
+  const protocol = PROXY_PROTOCOLS.includes(entry.protocol) ? entry.protocol : 'http'
+  const host = text(entry.host).replace(/^\[|\]$/gu, '')
+  const authority = `${host.includes(':') ? `[${host}]` : host}:${entry.port ?? proxyPort(protocol)}`
+  const username = text(entry.username)
+  const password = text(entry.password)
+  if (options.withCredentials !== true || (username === '' && password === '')) {
+    return `${protocol}://${authority}`
+  }
+  return `${protocol}://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${authority}`
+}
+
+/** Normalize a protocol name; empty input means the common `http` default. */
+export function normalizeProxyProtocol(raw) {
+  const value = text(raw).trim().toLowerCase()
+  if (value === '') return 'http'
+  if (!PROXY_PROTOCOLS.includes(value)) {
+    fail('invalid', `代理协议必须是 ${PROXY_PROTOCOLS.join('、')} 之一。`)
+  }
+  return value
+}
+
+/**
+ * Accept a pasted proxy URL (`socks5://user:pass@host:1080`) and split it into
+ * entry fields, so filling the form by pasting one string just works.
+ * @returns {{protocol:string,host:string,port:number|undefined,username:string,password:string}|null}
+ */
+function splitProxyUrl(raw) {
+  const value = text(raw).trim()
+  if (!/^[a-z][a-z0-9+.-]*:\/\//iu.test(value)) return null
+  let url
+  try {
+    url = new URL(value)
+  } catch {
+    fail('invalid', `代理地址不是有效的 URL：${value}`)
+  }
+  const protocol = url.protocol.replace(/:$/u, '').toLowerCase()
+  if (!PROXY_PROTOCOLS.includes(protocol)) {
+    fail('invalid', `代理地址的协议 ${protocol}:// 不受支持，请用 ${PROXY_PROTOCOLS.join('、')}。`)
+  }
+  return {
+    protocol,
+    host: url.hostname.replace(/^\[|\]$/gu, ''),
+    port: url.port === '' ? undefined : Number(url.port),
+    username: url.username === '' ? '' : decodeURIComponent(url.username),
+    password: url.password === '' ? '' : decodeURIComponent(url.password),
+  }
 }
 
 /**
@@ -127,7 +205,7 @@ function pickSecret(entry, field, next) {
  */
 function buildEntry(input, previous) {
   const type = input.type ?? previous?.type
-  if (!TYPES.includes(type)) fail('invalid', '凭据类型必须是 web、github 或 ssh。')
+  if (!TYPES.includes(type)) fail('invalid', `凭据类型必须是 ${TYPES.join('、')} 之一。`)
 
   const entry = previous ? structuredClone(previous) : { id: '', type, createdAt: nowIso() }
   entry.type = type
@@ -150,6 +228,7 @@ function buildEntry(input, previous) {
     delete entry.email
     delete entry.privateKey
     delete entry.passphrase
+    delete entry.protocol
   } else if (type === 'github') {
     if (Object.hasOwn(input, 'username')) entry.username = trimmed(input.username, LIMITS.username, 'GitHub 用户名')
     if (Object.hasOwn(input, 'email')) entry.email = trimmed(input.email, LIMITS.email, '提交邮箱')
@@ -161,9 +240,10 @@ function buildEntry(input, previous) {
     delete entry.authMethod
     delete entry.privateKey
     delete entry.passphrase
-  } else {
+    delete entry.protocol
+  } else if (type === 'ssh') {
     if (Object.hasOwn(input, 'host')) entry.host = trimmed(input.host, LIMITS.host, '主机')
-    if (Object.hasOwn(input, 'port')) entry.port = normalizePort(input.port)
+    if (Object.hasOwn(input, 'port')) entry.port = normalizePort(input.port, 22, 'SSH 端口')
     if (Object.hasOwn(input, 'username')) entry.username = trimmed(input.username, LIMITS.username, '登录用户')
     pickSecret(entry, 'password', secretInput(input, 'password'))
     pickSecret(entry, 'privateKey', secretInput(input, 'privateKey'))
@@ -178,6 +258,36 @@ function buildEntry(input, previous) {
     delete entry.url
     delete entry.token
     delete entry.email
+    delete entry.protocol
+  } else if (type === 'proxy') {
+    const pasted = Object.hasOwn(input, 'host') ? splitProxyUrl(input.host) : null
+    if (Object.hasOwn(input, 'protocol')) entry.protocol = normalizeProxyProtocol(input.protocol)
+    else if (pasted) entry.protocol = pasted.protocol
+    entry.protocol = entry.protocol ?? 'http'
+    if (Object.hasOwn(input, 'host')) {
+      entry.host = trimmed(pasted ? pasted.host : input.host, LIMITS.host, '代理主机')
+    }
+    entry.host = entry.host ?? ''
+    if (Object.hasOwn(input, 'port')) {
+      entry.port = normalizePort(input.port, proxyPort(entry.protocol), '代理端口')
+    } else if (pasted?.port !== undefined) {
+      entry.port = normalizePort(pasted.port, proxyPort(entry.protocol), '代理端口')
+    }
+    entry.port = entry.port ?? proxyPort(entry.protocol)
+    if (Object.hasOwn(input, 'username')) entry.username = trimmed(input.username, LIMITS.username, '代理用户名')
+    else if (pasted?.username) entry.username = trimmed(pasted.username, LIMITS.username, '代理用户名')
+    entry.username = entry.username ?? ''
+    if (Object.hasOwn(input, 'password')) {
+      pickSecret(entry, 'password', secretInput(input, 'password'))
+    } else if (pasted?.password) {
+      pickSecret(entry, 'password', limited(pasted.password, LIMITS.password, '代理密码'))
+    }
+    delete entry.url
+    delete entry.token
+    delete entry.email
+    delete entry.authMethod
+    delete entry.privateKey
+    delete entry.passphrase
   }
 
   if (entry.name === '') fail('invalid', '请填写凭据名称。')
@@ -189,11 +299,19 @@ function buildEntry(input, previous) {
   } else if (type === 'github') {
     if (!entry.username) fail('invalid', 'GitHub 凭据需要填写用户名。')
     if (!entry.token) fail('invalid', 'GitHub 凭据需要填写访问令牌（PAT）。')
-  } else {
+  } else if (type === 'ssh') {
     if (!entry.host) fail('invalid', 'SSH 凭据需要填写主机地址。')
     if (!entry.username) fail('invalid', 'SSH 凭据需要填写登录用户。')
     if (entry.authMethod === 'key' && !entry.privateKey) fail('invalid', 'SSH 密钥登录需要填写私钥内容。')
     if (entry.authMethod === 'password' && !entry.password) fail('invalid', 'SSH 密码登录需要填写密码。')
+  } else {
+    if (!entry.host) fail('invalid', '代理需要填写主机地址。')
+    if (!PROXY_PROTOCOLS.includes(entry.protocol)) {
+      fail('invalid', `代理协议必须是 ${PROXY_PROTOCOLS.join('、')} 之一。`)
+    }
+    if (!Number.isInteger(entry.port) || entry.port < 1 || entry.port > 65535) {
+      fail('invalid', '代理端口必须是 1-65535 之间的整数。')
+    }
   }
 
   return entry
@@ -217,6 +335,13 @@ export function toSummary(entry) {
     summary.username = entry.username
     summary.email = entry.email ?? ''
     summary.hasToken = typeof entry.token === 'string' && entry.token.length > 0
+  } else if (entry.type === 'proxy') {
+    summary.protocol = entry.protocol ?? 'http'
+    summary.host = entry.host
+    summary.port = entry.port ?? proxyPort(entry.protocol)
+    summary.username = entry.username ?? ''
+    summary.url = buildProxyUrl(entry)
+    summary.hasPassword = typeof entry.password === 'string' && entry.password.length > 0
   } else {
     summary.host = entry.host
     summary.port = entry.port ?? 22
@@ -238,6 +363,7 @@ export function maskSecret(name) {
 export function describeTarget(entry) {
   if (entry.type === 'web') return entry.url ?? ''
   if (entry.type === 'github') return entry.username ? `github.com/${entry.username}` : 'github.com'
+  if (entry.type === 'proxy') return buildProxyUrl(entry)
   return `${entry.username ?? ''}@${entry.host ?? ''}:${entry.port ?? 22}`
 }
 
@@ -326,6 +452,8 @@ export class Vault {
     for (const field of SECRET_FIELDS[entry.type] ?? []) {
       copy.hasSecrets[field] = typeof entry[field] === 'string' && entry[field].length > 0
     }
+    // Handy derived view: the credential-less proxy URL (with user, no password).
+    if (entry.type === 'proxy') copy.url = buildProxyUrl(entry)
     return copy
   }
 
@@ -388,7 +516,7 @@ export class Vault {
     const limit = Math.max(1, this.settings.maxPromptEntries ?? 12)
     const lines = entries.slice(0, limit).map((entry) => {
       const note = (entry.note ?? '').replace(/\s+/gu, ' ').slice(0, 80)
-      const kind = entry.type === 'web' ? '网页' : entry.type === 'github' ? 'GitHub' : 'SSH'
+      const kind = entry.type === 'web' ? '网页' : entry.type === 'github' ? 'GitHub' : entry.type === 'proxy' ? '代理' : 'SSH'
       return `- ${kind}「${entry.name}」(id: ${entry.id}) — ${describeTarget(entry)}${note ? `；用途：${note}` : ''}`
     })
     const more = entries.length > limit ? `（还有 ${entries.length - limit} 条，用 credential_list 查看。）` : ''
@@ -397,7 +525,7 @@ export class Vault {
       '用户在「凭据管家」里保存了以下凭据，明文不在提示词中：',
       ...lines,
       more,
-      '使用方式：credential_list 查看全部；credential_get 传 reveal=true 才会返回密码/令牌明文（会写入会话记录）；SSH 命令优先用 ssh_exec 直接执行，避免明文出现在命令里。',
+      '使用方式：credential_list 查看全部；credential_get 传 reveal=true 才会返回密码/令牌明文（会写入会话记录）；SSH 命令优先用 ssh_exec 直接执行，避免明文出现在命令里；代理先用 proxy_test 验证连通性再使用。',
     ]
       .filter((line) => line !== '')
       .join('\n')

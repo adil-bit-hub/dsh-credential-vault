@@ -18,3 +18,8 @@
         allowAgentDelete: false
         # Default timeout for ssh_exec commands, in milliseconds.
         sshTimeoutMs: 60000
+        # Default timeout for proxy_test, in milliseconds.
+        proxyTimeoutMs: 15000
+        # Target URL proxy_test fetches through the proxy (an IP echo endpoint
+        # makes the exit IP show up in the result).
+        proxyTestUrl: https://api.ipify.org?format=json

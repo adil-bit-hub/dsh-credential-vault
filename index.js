@@ -1,10 +1,11 @@
 /**
  * dsh-credential-vault — Host half.
  *
- * One credential vault for the whole profile: web logins, GitHub tokens and
- * SSH servers, addressed by id and stored as records in the Harness credential
- * store. The browser half (./client) renders the Settings section; this half
- * owns persistence, the agent tools and the Browser ⇄ Host route.
+ * One credential vault for the whole profile: web logins, GitHub tokens, SSH
+ * servers and HTTP/SOCKS proxies, addressed by id and stored as records in the
+ * Harness credential store. The browser half (./client) renders the Settings
+ * section; this half owns persistence, the agent tools and the Browser ⇄ Host
+ * route.
  *
  * @module dsh-credential-vault
  */
@@ -33,6 +34,11 @@ function resolveSettings(config) {
     allowAgentReveal: source.allowAgentReveal !== false,
     allowAgentWrite: source.allowAgentWrite !== false,
     sshTimeoutMs: Math.max(5000, Math.min(30 * 60_000, number(source.sshTimeoutMs, 60_000))),
+    proxyTimeoutMs: Math.max(1000, Math.min(120_000, number(source.proxyTimeoutMs, 15_000))),
+    proxyTestUrl:
+      typeof source.proxyTestUrl === 'string' && source.proxyTestUrl.trim() !== ''
+        ? source.proxyTestUrl.trim()
+        : 'https://api.ipify.org?format=json',
   }
 }
 
